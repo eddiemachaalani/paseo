@@ -15,6 +15,99 @@ function createAgentTab(): WorkspaceTabDescriptor {
 }
 
 describe("buildWorkspaceTabMenuEntries", () => {
+  function createAgentMenuInput(
+    overrides: Partial<Parameters<typeof buildWorkspaceTabMenuEntries>[0]> = {},
+  ): Parameters<typeof buildWorkspaceTabMenuEntries>[0] {
+    return {
+      surface: "desktop",
+      tab: createAgentTab(),
+      index: 0,
+      tabCount: 1,
+      menuTestIDBase: "workspace-tab-context-agent_123",
+      onCopyResumeCommand: vi.fn(),
+      onCopyAgentId: vi.fn(),
+      onCopyTerminalId: vi.fn(),
+      onCopyFilePath: vi.fn(),
+      onReloadAgent: vi.fn(),
+      onRenameTab: vi.fn(),
+      onCloseTab: vi.fn(),
+      onCloseTabsBefore: vi.fn(),
+      onCloseTabsAfter: vi.fn(),
+      onCloseOtherTabs: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it("adds a switch-provider submenu after reload when the agent has targets", () => {
+    const onSwitch = vi.fn();
+    const resolveTargets = vi.fn((agentId: string) =>
+      agentId === "agent-123"
+        ? [
+            {
+              provider: "claude-personal",
+              label: "Claude (Personal)",
+              description: "Personal account",
+            },
+            { provider: "claude", label: "Claude" },
+          ]
+        : [],
+    );
+
+    const entries = buildWorkspaceTabMenuEntries(
+      createAgentMenuInput({ agentProviderSwitch: { resolveTargets, onSwitch } }),
+    );
+
+    expect(resolveTargets).toHaveBeenCalledWith("agent-123");
+    expect(entries.filter((entry) => entry.kind !== "separator").map((entry) => entry.key)).toEqual(
+      [
+        "copy-resume-command",
+        "copy-agent-id",
+        "rename",
+        "close-before",
+        "close-after",
+        "close-others",
+        "reload-agent",
+        "switch-provider",
+        "close",
+      ],
+    );
+    const submenu = entries.find((entry) => entry.kind === "submenu");
+    if (submenu?.kind !== "submenu") {
+      throw new Error("expected a submenu entry");
+    }
+    expect(submenu).toMatchObject({
+      label: "Switch provider",
+      icon: "arrow-left-right",
+      testID: "workspace-tab-context-agent_123-switch-provider",
+      page: { id: "workspace-tab-context-agent_123-switch-provider", title: "Switch provider" },
+    });
+    expect(submenu.page.options.map((option) => option.label)).toEqual([
+      "Claude (Personal)",
+      "Claude",
+    ]);
+    expect(submenu.page.options[0]).toMatchObject({
+      description: "Personal account",
+      testID: "workspace-tab-context-agent_123-switch-provider-claude-personal",
+    });
+
+    submenu.page.options[0]?.onSelect();
+    expect(onSwitch).toHaveBeenCalledWith("agent-123", "claude-personal");
+  });
+
+  it("omits the switch-provider submenu when the agent has no targets", () => {
+    const entries = buildWorkspaceTabMenuEntries(
+      createAgentMenuInput({
+        agentProviderSwitch: { resolveTargets: () => [], onSwitch: vi.fn() },
+      }),
+    );
+    expect(entries.some((entry) => entry.kind === "submenu")).toBe(false);
+  });
+
+  it("omits the switch-provider submenu when the host cannot switch", () => {
+    const entries = buildWorkspaceTabMenuEntries(createAgentMenuInput());
+    expect(entries.some((entry) => entry.kind === "submenu")).toBe(false);
+  });
+
   it("uses desktop tab ordering labels for desktop menus", () => {
     const onCopyResumeCommand = vi.fn();
     const onCopyAgentId = vi.fn();

@@ -200,6 +200,12 @@ interface ProviderSnapshotTarget {
   catalogScope: ProviderCatalogScope;
 }
 
+function derivedFromProviderIdField(
+  derivedFromProviderId: string | null | undefined,
+): Pick<ProviderSnapshotEntry, "derivedFromProviderId"> {
+  return derivedFromProviderId ? { derivedFromProviderId } : {};
+}
+
 export class ProviderSnapshotManager {
   private readonly snapshots = new Map<string, Map<AgentProvider, ProviderSnapshotEntry>>();
   private readonly providerLoads = new Map<string, Map<AgentProvider, ProviderLoad>>();
@@ -681,6 +687,7 @@ export class ProviderSnapshotManager {
         label: definition.label,
         description: definition.description,
         defaultModeId: definition.defaultModeId,
+        ...derivedFromProviderIdField(definition.derivedFromProviderId),
         error: toErrorMessage(error),
       };
     }
@@ -728,6 +735,7 @@ export class ProviderSnapshotManager {
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
+        ...derivedFromProviderIdField(definition?.derivedFromProviderId),
       });
     }
     return entries;
@@ -747,6 +755,7 @@ export class ProviderSnapshotManager {
         label: definition?.label,
         description: definition?.description,
         defaultModeId: definition?.defaultModeId ?? null,
+        ...derivedFromProviderIdField(definition?.derivedFromProviderId),
       };
 
       if (!definition?.enabled) {
@@ -915,6 +924,7 @@ export class ProviderSnapshotManager {
       label: definition.label,
       description: definition.description,
       defaultModeId: definition.defaultModeId,
+      ...derivedFromProviderIdField(definition.derivedFromProviderId),
     };
     const setEntry = (entry: ProviderSnapshotEntry) => {
       if (!this.isCurrentProviderLoad(snapshotCwd, provider, load)) {

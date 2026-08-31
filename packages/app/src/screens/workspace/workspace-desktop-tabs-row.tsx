@@ -12,6 +12,7 @@ import React, {
 import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
 import {
   CopyX,
+  ArrowLeftRight,
   ArrowLeftToLine,
   ArrowRightToLine,
   Copy,
@@ -39,6 +40,7 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -56,8 +58,10 @@ import {
   type WorkspaceTabPresentation,
 } from "@/screens/workspace/workspace-tab-presentation";
 import { buildDeterministicWorkspaceTabId } from "@/workspace-tabs/identity";
+import { useWorkspaceTabMenuPages } from "@/screens/workspace/workspace-tab-menu-pages";
 import {
   buildWorkspaceDesktopTabActions,
+  type WorkspaceTabAgentProviderSwitch,
   type WorkspaceDesktopTabActions,
   type WorkspaceTabMenuEntry,
   type WorkspaceTabMenuLabels,
@@ -116,6 +120,7 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
+const ThemedArrowLeftRight = withUnistyles(ArrowLeftRight);
 const ThemedCopyX = withUnistyles(CopyX);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedPlus = withUnistyles(Plus);
@@ -356,6 +361,8 @@ function TabContextMenuItem({
         return <ThemedArrowLeftToLine size={16} uniProps={mutedColorMapping} />;
       case "arrow-right-to-line":
         return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
+      case "arrow-left-right":
+        return <ThemedArrowLeftRight size={16} uniProps={mutedColorMapping} />;
       case "copy-x":
         return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
       case "pencil":
@@ -383,6 +390,35 @@ function TabContextMenuItem({
       {entry.label}
     </ContextMenuItem>
   );
+}
+
+function TabContextSubmenuTrigger({
+  entry,
+}: {
+  entry: Extract<WorkspaceTabMenuEntry, { kind: "submenu" }>;
+}) {
+  const leading = useMemo(
+    () =>
+      entry.icon === "arrow-left-right" ? (
+        <ThemedArrowLeftRight size={16} uniProps={mutedColorMapping} />
+      ) : undefined,
+    [entry.icon],
+  );
+  return (
+    <ContextMenuSubTrigger id={entry.page.id} testID={entry.testID} leading={leading}>
+      {entry.label}
+    </ContextMenuSubTrigger>
+  );
+}
+
+function renderTabContextMenuEntry(entry: WorkspaceTabMenuEntry) {
+  if (entry.kind === "separator") {
+    return <ContextMenuSeparator key={entry.key} />;
+  }
+  if (entry.kind === "submenu") {
+    return <TabContextSubmenuTrigger key={entry.key} entry={entry} />;
+  }
+  return <TabContextMenuItem key={entry.key} entry={entry} />;
 }
 
 function tabKeyExtractor(tab: WorkspaceDesktopTabRowItem) {
@@ -458,6 +494,7 @@ interface WorkspaceDesktopTabsRowProps {
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
   onCloseTabsToRight: (tabId: string) => Promise<void> | void;
@@ -683,6 +720,7 @@ function TabChip({
   dragHandleProps: DraggableListDragHandleProps | undefined;
 }) {
   const { closeButtonTestId, contextMenuTestId, menuEntries } = resolvedTab;
+  const menuPages = useWorkspaceTabMenuPages(menuEntries);
   const middleClickRef = useMiddleClickClose(
     useCallback(() => void onCloseTab(tab.tabId), [onCloseTab, tab.tabId]),
   );
@@ -859,14 +897,13 @@ function TabChip({
           </View>
         ) : null}
 
-        <ContextMenuContent align="start" width={DROPDOWN_WIDTH} testID={contextMenuTestId}>
-          {menuEntries.map((entry) =>
-            entry.kind === "separator" ? (
-              <ContextMenuSeparator key={entry.key} />
-            ) : (
-              <TabContextMenuItem key={entry.key} entry={entry} />
-            ),
-          )}
+        <ContextMenuContent
+          align="start"
+          width={DROPDOWN_WIDTH}
+          testID={contextMenuTestId}
+          pages={menuPages}
+        >
+          {menuEntries.map(renderTabContextMenuEntry)}
         </ContextMenuContent>
       </ContextMenu>
     </View>
@@ -946,6 +983,7 @@ function ResolvedWorkspaceDesktopTabsRow({
   onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
+  agentProviderSwitch,
   onRenameTab,
   onCloseTabsToLeft,
   onCloseTabsToRight,
@@ -1031,6 +1069,8 @@ function ResolvedWorkspaceDesktopTabsRow({
       closeOthers: t("workspace.tabs.menu.closeOthers"),
       reloadAgent: t("workspace.tabs.menu.reloadAgent"),
       reloadAgentTooltip: t("workspace.tabs.menu.reloadAgentTooltip"),
+      switchProvider: t("workspace.tabs.menu.switchProvider"),
+      switchProviderTooltip: t("workspace.tabs.menu.switchProviderTooltip"),
       close: t("workspace.tabs.menu.close"),
     }),
     [t],
@@ -1201,6 +1241,7 @@ function ResolvedWorkspaceDesktopTabsRow({
           onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
           onReloadAgent={onReloadAgent}
+          agentProviderSwitch={agentProviderSwitch}
           onRenameTab={onRenameTab}
           onCloseTabsToLeft={onCloseTabsToLeft}
           onCloseTabsToRight={onCloseTabsToRight}
@@ -1233,6 +1274,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       onCopyResumeCommand,
       onNavigateTab,
       onReloadAgent,
+      agentProviderSwitch,
       onRenameTab,
       setHoveredCloseTabKey,
       tabMenuLabels,
@@ -1346,6 +1388,7 @@ function ResolvedDesktopTabChip({
   onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
+  agentProviderSwitch,
   onRenameTab,
   onCloseTabsToLeft,
   onCloseTabsToRight,
@@ -1371,6 +1414,7 @@ function ResolvedDesktopTabChip({
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
   onCloseTabsToRight: (tabId: string) => Promise<void> | void;
@@ -1399,6 +1443,7 @@ function ResolvedDesktopTabChip({
         onCopyTerminalId,
         onCopyFilePath,
         onReloadAgent,
+        agentProviderSwitch,
         onRenameTab,
         onCloseTab,
         onCloseTabsToLeft,
@@ -1419,6 +1464,7 @@ function ResolvedDesktopTabChip({
       onCopyResumeCommand,
       labels,
       onReloadAgent,
+      agentProviderSwitch,
       onRenameTab,
       tabCount,
     ],

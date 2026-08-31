@@ -586,6 +586,9 @@ export const ar: TranslationResources = {
         moveToMain: "Move to main panel",
         reloadAgent: "إعادة تحميل الوكيل",
         reloadAgentTooltip: "قم بإعادة تحميل الوكيل لتحديث المهارات أو MCPs أو حالة تسجيل الدخول.",
+        switchProvider: "تبديل المزود",
+        switchProviderTooltip:
+          "متابعة هذا الوكيل على إدخال مزود آخر يشغّل الوكيل نفسه، مثل حساب مختلف.",
         close: "يغلق",
         renameTerminal: "إعادة تسمية المحطة",
         renameAgent: "إعادة تسمية الوكيل",
@@ -627,6 +630,9 @@ export const ar: TranslationResources = {
         reloadingAgent: "وكيل إعادة التحميل...",
         reloadedAgent: "وكيل إعادة تحميل",
         failedToReloadAgent: "فشل في إعادة تحميل الوكيل",
+        switchingProvider: "جارٍ التبديل إلى {{label}}...",
+        switchedProvider: "تم التبديل إلى {{label}}",
+        failedToSwitchProvider: "فشل تبديل المزود",
         failedToCloseAgent: "فشل في إغلاق الوكيل",
       },
       confirmations: {

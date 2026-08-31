@@ -95,7 +95,8 @@ import {
   useHostRuntimeSnapshot,
   useHosts,
 } from "@/runtime/host-runtime";
-import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { prefetchProvidersSnapshot, useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
+import { selectAgentProviderSwitchTargets } from "@/provider-selection/switch-targets";
 import {
   shouldSeedWorkspaceSetupTab,
   shouldShowWorkspaceSetup,
@@ -132,6 +133,7 @@ import {
 import {
   buildWorkspaceTabMenuEntries,
   type WorkspaceTabMenuLabels,
+  type WorkspaceTabAgentProviderSwitch,
 } from "@/screens/workspace/workspace-tab-menu";
 import { useDesktopBrowserNewTabRequests } from "@/desktop/browser/new-tab-requests";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -415,6 +417,7 @@ interface MobileWorkspaceTabSwitcherProps {
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCloseTabsAbove: (tabId: string) => Promise<void> | void;
@@ -522,6 +525,7 @@ function MobileWorkspaceTabOption({
   onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
+  agentProviderSwitch,
   onRenameTab,
   onCloseTab,
   onCloseTabsAbove,
@@ -541,6 +545,7 @@ function MobileWorkspaceTabOption({
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCloseTabsAbove: (tabId: string) => Promise<void> | void;
@@ -562,6 +567,8 @@ function MobileWorkspaceTabOption({
       closeOthers: t("workspace.tabs.menu.closeOthers"),
       reloadAgent: t("workspace.tabs.menu.reloadAgent"),
       reloadAgentTooltip: t("workspace.tabs.menu.reloadAgentTooltip"),
+      switchProvider: t("workspace.tabs.menu.switchProvider"),
+      switchProviderTooltip: t("workspace.tabs.menu.switchProviderTooltip"),
       close: t("workspace.tabs.menu.close"),
     }),
     [t],
@@ -578,6 +585,7 @@ function MobileWorkspaceTabOption({
     onCopyTerminalId,
     onCopyFilePath,
     onReloadAgent,
+    agentProviderSwitch,
     onRenameTab,
     onCloseTab,
     onCloseTabsBefore: onCloseTabsAbove,
@@ -650,6 +658,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
+  agentProviderSwitch,
   onRenameTab,
   onCloseTab,
   onCloseTabsAbove,
@@ -707,6 +716,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
           onReloadAgent={onReloadAgent}
+          agentProviderSwitch={agentProviderSwitch}
           onRenameTab={onRenameTab}
           onCloseTab={onCloseTab}
           onCloseTabsAbove={onCloseTabsAbove}
@@ -726,6 +736,7 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
       onCopyTerminalId,
       onCopyFilePath,
       onReloadAgent,
+      agentProviderSwitch,
       onRenameTab,
       onCloseTab,
       onCloseTabsAbove,
@@ -2756,6 +2767,84 @@ function WorkspaceScreenContent({
     [client, isConnected, normalizedServerId, toast, t],
   );
 
+  const supportsAgentProviderSwitch = useSessionStore(
+    (state) =>
+      state.sessions[normalizedServerId]?.serverInfo?.features?.agentProviderSwitch === true,
+  );
+  const { entries: providerSnapshotEntries } = useProvidersSnapshot(normalizedServerId, {
+    enabled: supportsAgentProviderSwitch,
+    cwd: workspaceDirectory,
+  });
+  // One string of agent→provider pairs, so switch targets rebuild only when an agent moves.
+  const agentProviderKey = useSessionStore((state) => {
+    const agents = state.sessions[normalizedServerId]?.agents;
+    if (!agents) {
+      return "";
+    }
+    const parts: string[] = [];
+    for (const agent of agents.values()) {
+      parts.push(`${agent.id}:${agent.provider}`);
+    }
+    return parts.join("|");
+  });
+  const agentProviders = useMemo(() => {
+    const providers = new Map<string, string>();
+    for (const part of agentProviderKey.split("|")) {
+      const separator = part.lastIndexOf(":");
+      if (separator > 0) {
+        providers.set(part.slice(0, separator), part.slice(separator + 1));
+      }
+    }
+    return providers;
+  }, [agentProviderKey]);
+
+  const handleSwitchAgentProvider = useCallback(
+    async (agentId: string, provider: string) => {
+      if (!client || !isConnected) {
+        toast.error(t("workspace.terminal.hostDisconnected"));
+        return;
+      }
+      const label =
+        providerSnapshotEntries?.find((entry) => entry.provider === provider)?.label ?? provider;
+      toast.show(t("workspace.tabs.toasts.switchingProvider", { label }), { durationMs: null });
+      try {
+        await client.switchAgentProvider(agentId, provider);
+        toast.show(t("workspace.tabs.toasts.switchedProvider", { label }), { variant: "success" });
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t("workspace.tabs.toasts.failedToSwitchProvider"),
+        );
+      }
+    },
+    [client, isConnected, providerSnapshotEntries, toast, t],
+  );
+
+  const agentProviderSwitch = useMemo<WorkspaceTabAgentProviderSwitch | undefined>(() => {
+    if (!supportsAgentProviderSwitch || !providerSnapshotEntries) {
+      return undefined;
+    }
+    return {
+      resolveTargets: (agentId) => {
+        const currentProvider = agentProviders.get(agentId);
+        if (!currentProvider) {
+          return [];
+        }
+        return selectAgentProviderSwitchTargets({
+          entries: providerSnapshotEntries,
+          currentProvider,
+        });
+      },
+      onSwitch: handleSwitchAgentProvider,
+    };
+  }, [
+    agentProviders,
+    handleSwitchAgentProvider,
+    providerSnapshotEntries,
+    supportsAgentProviderSwitch,
+  ]);
+
   const handleCopyWorkspacePath = useCallback(async () => {
     if (!workspaceDirectory) {
       toast.error(t("workspace.header.toasts.workspacePathUnavailable"));
@@ -3951,6 +4040,7 @@ function WorkspaceScreenContent({
         onCopyTerminalId={handleCopyTerminalId}
         onCopyFilePath={handleCopyFilePath}
         onReloadAgent={handleReloadAgent}
+        agentProviderSwitch={agentProviderSwitch}
         onRenameTab={handleRenameTab}
         onCloseTabsToLeft={handleCloseTabsToLeftInPane}
         onCloseTabsToRight={handleCloseTabsToRightInPane}
@@ -3987,6 +4077,7 @@ function WorkspaceScreenContent({
     handleCopyTerminalId,
     handleCopyFilePath,
     handleReloadAgent,
+    agentProviderSwitch,
     handleRenameTab,
     handleCloseTabsToLeftInPane,
     handleCloseTabsToRightInPane,
@@ -4030,6 +4121,7 @@ function WorkspaceScreenContent({
           onCopyTerminalId={handleCopyTerminalId}
           onCopyFilePath={handleCopyFilePath}
           onReloadAgent={handleReloadAgent}
+          agentProviderSwitch={agentProviderSwitch}
           onRenameTab={handleRenameTab}
           onCloseTab={handleCloseTabById}
           onCloseTabsAbove={handleCloseTabsToLeft}
@@ -4054,6 +4146,7 @@ function WorkspaceScreenContent({
             onCopyTerminalId={handleCopyTerminalId}
             onCopyFilePath={handleCopyFilePath}
             onReloadAgent={handleReloadAgent}
+            agentProviderSwitch={agentProviderSwitch}
             onRenameTab={handleRenameTab}
             onCloseTabsToLeft={handleCloseTabsToLeft}
             onCloseTabsToRight={handleCloseTabsToRight}

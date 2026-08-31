@@ -590,6 +590,9 @@ export const ptBR: TranslationResources = {
         moveToMain: "Mover para o painel principal",
         reloadAgent: "Recarregar agente",
         reloadAgentTooltip: "Recarregue o agente para atualizar skills, MCPs ou status de login.",
+        switchProvider: "Trocar provedor",
+        switchProviderTooltip:
+          "Continuar este agente em outra entrada de provedor que executa o mesmo agente, como uma conta diferente.",
         close: "Fechar",
         renameTerminal: "Renomear terminal",
         renameAgent: "Renomear agente",
@@ -631,6 +634,9 @@ export const ptBR: TranslationResources = {
         reloadingAgent: "Recarregando agente...",
         reloadedAgent: "Agente recarregado",
         failedToReloadAgent: "Falha ao recarregar agente",
+        switchingProvider: "Trocando para {{label}}...",
+        switchedProvider: "Trocado para {{label}}",
+        failedToSwitchProvider: "Falha ao trocar de provedor",
         failedToCloseAgent: "Falha ao fechar agente",
       },
       confirmations: {

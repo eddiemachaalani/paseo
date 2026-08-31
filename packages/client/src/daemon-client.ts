@@ -2594,6 +2594,20 @@ export class DaemonClient {
     }
   }
 
+  async switchAgentProvider(agentId: string, provider: AgentProvider): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.provider.switch.response">({
+        message: {
+          type: "agent.provider.switch.request",
+          agentId,
+          provider,
+        },
+      });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "switchAgentProvider rejected");
+    }
+  }
+
   async updateAgent(
     agentId: string,
     updates: { name?: string; labels?: Record<string, string> },

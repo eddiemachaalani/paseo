@@ -668,6 +668,14 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
+function withoutObservedPlanWindows(usage: AgentUsage | undefined): AgentUsage | undefined {
+  if (!usage) {
+    return usage;
+  }
+  const { planWindows: _planWindows, planWindowsObservedAt: _observedAt, ...rest } = usage;
+  return rest;
+}
+
 export class AgentManager {
   private readonly clients = new Map<AgentProvider, AgentClient>();
   private readonly providerEnabled = new Map<AgentProvider, boolean>();
@@ -1344,10 +1352,58 @@ export class AgentManager {
     );
   }
 
+  // Move a live agent to another provider entry that runs the same agent
+  // runtime — typically a profile of the same provider pinned to a different
+  // account. The native session is resumed under the target provider, so the
+  // conversation, timeline, labels, and workspace carry over. Asking for the
+  // provider the agent already runs on is a no-op.
+  switchAgentProvider(agentId: string, provider: AgentProvider): Promise<ManagedAgent> {
+    return this.trackAgentRegistrationOperation(
+      this.switchAgentProviderInternal(agentId, provider),
+    );
+  }
+
+  private async switchAgentProviderInternal(
+    agentId: string,
+    provider: AgentProvider,
+  ): Promise<ManagedAgent> {
+    const existing = this.requireSessionAgent(agentId);
+    if (provider === existing.provider) {
+      return { ...existing };
+    }
+    this.requireEnabledProvider(provider);
+    await this.requireAvailableClient({ provider });
+    const currentRuntime = this.resolveRuntimeProvider(existing.provider);
+    const targetRuntime = this.resolveRuntimeProvider(provider);
+    if (currentRuntime !== targetRuntime) {
+      throw new Error(
+        `Provider '${provider}' runs '${targetRuntime}', not '${currentRuntime}'. An agent can only move between providers that share a runtime.`,
+      );
+    }
+    return this.reloadAgentSessionInternal(agentId, undefined, { provider });
+  }
+
+  // Follows a profile's `extends` chain to the provider that actually runs the
+  // agent. Two entries with the same root share a persistence format and a
+  // process, which is the precondition for resuming one's session as the other.
+  resolveRuntimeProvider(provider: AgentProvider): AgentProvider {
+    const visited = new Set<AgentProvider>();
+    let current = provider;
+    while (!visited.has(current)) {
+      visited.add(current);
+      const base = this.providerDefinitions.get(current)?.derivedFromProviderId;
+      if (!base) {
+        return current;
+      }
+      current = base;
+    }
+    return current;
+  }
+
   private async reloadAgentSessionInternal(
     agentId: string,
     overrides?: Partial<AgentSessionConfig>,
-    options?: { rehydrateFromDisk?: boolean },
+    options?: { rehydrateFromDisk?: boolean; provider?: AgentProvider },
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     let existing = this.requireSessionAgent(agentId);
@@ -1356,12 +1412,19 @@ export class AgentManager {
       existing = this.requireSessionAgent(agentId);
     }
     const rehydrateFromDisk = options?.rehydrateFromDisk ?? false;
+    const handle = existing.persistence;
+    const providerChanged =
+      options?.provider !== undefined && options.provider !== existing.provider;
+    const provider = options?.provider ?? handle?.provider ?? existing.provider;
     const preservedHistoryPrimed = existing.historyPrimed;
-    const preservedLastUsage = existing.lastUsage;
+    // Plan windows were observed from the provider the agent last ran on. On a
+    // provider change they would label the new account with the old account's
+    // meters until its first call replaces them, so they are dropped instead.
+    const preservedLastUsage = providerChanged
+      ? withoutObservedPlanWindows(existing.lastUsage)
+      : existing.lastUsage;
     const preservedLastError = existing.lastError;
     const preservedAttention = existing.attention;
-    const handle = existing.persistence;
-    const provider = handle?.provider ?? existing.provider;
     const client = this.requireClient(provider);
     const refreshConfig = {
       ...existing.config,
@@ -1373,7 +1436,11 @@ export class AgentManager {
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
 
     const session = handle
-      ? await client.resumeSession(handle, providerLaunchConfig, launchContext)
+      ? await client.resumeSession(
+          providerChanged ? { ...handle, provider } : handle,
+          providerLaunchConfig,
+          launchContext,
+        )
       : await client.createSession(providerLaunchConfig, launchContext);
     await this.requireExternalMcpSupport(session, storedConfig);
 

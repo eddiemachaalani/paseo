@@ -586,6 +586,9 @@ export const zhCN: TranslationResources = {
         moveToMain: "移至主面板",
         reloadAgent: "重新加载 Agent",
         reloadAgentTooltip: "重新加载 Agent 以更新 skills、MCPs 或登录状态。",
+        switchProvider: "切换 Provider",
+        switchProviderTooltip:
+          "在运行同一 Agent 的另一个 Provider 条目（例如另一个账号）上继续此 Agent。",
         close: "关闭",
         renameTerminal: "重命名 Terminal",
         renameAgent: "重命名 Agent",
@@ -627,6 +630,9 @@ export const zhCN: TranslationResources = {
         reloadingAgent: "正在重新加载 Agent...",
         reloadedAgent: "已重新加载 Agent",
         failedToReloadAgent: "重新加载 Agent 失败",
+        switchingProvider: "正在切换到 {{label}}...",
+        switchedProvider: "已切换到 {{label}}",
+        failedToSwitchProvider: "切换 Provider 失败",
         failedToCloseAgent: "关闭 Agent 失败",
       },
       confirmations: {

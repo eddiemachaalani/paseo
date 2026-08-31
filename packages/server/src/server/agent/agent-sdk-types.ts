@@ -125,6 +125,8 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  /** The registered provider this entry extends; absent on built-ins. See the protocol type. */
+  derivedFromProviderId?: string;
 }
 
 export interface AgentCreateConfigParent {

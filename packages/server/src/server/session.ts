@@ -2213,6 +2213,8 @@ export class Session {
     switch (msg.type) {
       case "agent.detach.request":
         return this.handleDetachAgentRequest(msg.agentId, msg.requestId);
+      case "agent.provider.switch.request":
+        return this.handleAgentProviderSwitchRequest(msg);
       default:
         return undefined;
     }
@@ -2779,6 +2781,56 @@ export class Session {
     }
 
     return { agentId, archivedAt };
+  }
+
+  private async handleAgentProviderSwitchRequest(
+    msg: Extract<SessionInboundMessage, { type: "agent.provider.switch.request" }>,
+  ): Promise<void> {
+    const { agentId, provider, requestId } = msg;
+    this.sessionLogger.info({ agentId, provider, requestId }, "Switching agent provider");
+
+    try {
+      await ensureAgentLoaded(agentId, {
+        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        logger: this.sessionLogger,
+      });
+      await this.interruptAgentIfRunning(agentId);
+      await this.agentManager.switchAgentProvider(agentId, provider);
+      this.emit({
+        type: "agent.provider.switch.response",
+        payload: {
+          requestId,
+          agentId,
+          accepted: true,
+          error: null,
+        },
+      });
+    } catch (error) {
+      const message = getErrorMessageOr(error, "Failed to switch agent provider");
+      this.sessionLogger.error(
+        { err: error, agentId, provider, requestId },
+        "Failed to switch agent provider",
+      );
+      this.emit({
+        type: "activity_log",
+        payload: {
+          id: uuidv4(),
+          timestamp: new Date(),
+          type: "error",
+          content: `Failed to switch agent provider: ${message}`,
+        },
+      });
+      this.emit({
+        type: "agent.provider.switch.response",
+        payload: {
+          requestId,
+          agentId,
+          accepted: false,
+          error: message,
+        },
+      });
+    }
   }
 
   private async handleDetachAgentRequest(agentId: string, requestId: string): Promise<void> {

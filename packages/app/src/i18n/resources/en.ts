@@ -584,6 +584,9 @@ export const en = {
         moveToMain: "Move to main panel",
         reloadAgent: "Reload agent",
         reloadAgentTooltip: "Reload agent to update skills, MCPs or login status.",
+        switchProvider: "Switch provider",
+        switchProviderTooltip:
+          "Continue this agent on another provider entry that runs the same agent, such as a different account.",
         close: "Close",
         renameTerminal: "Rename terminal",
         renameAgent: "Rename agent",
@@ -625,6 +628,9 @@ export const en = {
         reloadingAgent: "Reloading agent...",
         reloadedAgent: "Reloaded agent",
         failedToReloadAgent: "Failed to reload agent",
+        switchingProvider: "Switching to {{label}}...",
+        switchedProvider: "Switched to {{label}}",
+        failedToSwitchProvider: "Failed to switch provider",
         failedToCloseAgent: "Failed to close agent",
       },
       confirmations: {

@@ -114,6 +114,12 @@ export interface ProviderSnapshotEntry {
   label?: string;
   description?: string;
   defaultModeId?: string | null;
+  /**
+   * The registered provider this entry extends (a profile's `extends`), absent
+   * on built-in providers. Entries that resolve to the same root run the same
+   * agent runtime, which is what lets an agent move between them.
+   */
+  derivedFromProviderId?: string;
 }
 
 export interface AgentFeatureToggle {

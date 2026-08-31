@@ -591,6 +591,9 @@ export const ru: TranslationResources = {
         moveToMain: "Переместить на основную панель",
         reloadAgent: "Перезагрузить агента",
         reloadAgentTooltip: "Перезагрузите агента, чтобы обновить навыки, MCP или статус входа.",
+        switchProvider: "Сменить провайдера",
+        switchProviderTooltip:
+          "Продолжить этого агента на другой записи провайдера с тем же агентом, например на другом аккаунте.",
         close: "Закрыть",
         renameTerminal: "Переименовать терминал",
         renameAgent: "Переименовать агента",
@@ -632,6 +635,9 @@ export const ru: TranslationResources = {
         reloadingAgent: "Перезагрузка агента...",
         reloadedAgent: "Агент перезагружен",
         failedToReloadAgent: "Не удалось перезагрузить агента",
+        switchingProvider: "Переключение на {{label}}...",
+        switchedProvider: "Переключено на {{label}}",
+        failedToSwitchProvider: "Не удалось сменить провайдера",
         failedToCloseAgent: "Не удалось закрыть агента",
       },
       confirmations: {

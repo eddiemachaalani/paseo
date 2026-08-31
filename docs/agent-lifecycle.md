@@ -24,6 +24,17 @@ primed.
 Idle agents remain resident indefinitely. Runtime closure happens only through an explicit lifecycle
 action such as archive, replacement, reload, workspace teardown, or daemon shutdown.
 
+An agent can move to another provider entry without ending its session — a second account
+configured as a profile of the same provider, say. `switchAgentProvider` is a reload under the
+target provider's client: the native session is resumed with that entry's credentials, and the
+agent's provider, persistence handle, and stored record move with it while the timeline, labels,
+and workspace stay put. Only entries with the same root provider qualify (follow
+`derivedFromProviderId` to the built-in that runs the agent), because a shared runtime is what makes
+one entry's session file resumable by another. Plan-usage windows observed from the previous
+provider's rate-limit events are dropped in the move so the meter never shows the old account's
+numbers under the new account's name. The app offers this as **Switch provider** in the agent's tab
+menu, gated on `server_info.features.agentProviderSwitch`.
+
 A provider runtime can still die on its own — crash, OOM kill, host suspend. Work the agent parked
 inside that process dies with it: Claude Code's background Bash shells, `Monitor` watches, and
 workflows all live in the CLI process, and the completion notification that would have woken the

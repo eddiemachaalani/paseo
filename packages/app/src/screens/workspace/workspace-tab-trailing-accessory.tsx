@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Text } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
+  ArrowLeftRight,
   ArrowLeftToLine,
   ArrowRightToLine,
   Copy,
@@ -17,9 +18,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { WorkspaceTabMenuEntry } from "@/screens/workspace/workspace-tab-menu";
+import { useWorkspaceTabMenuPages } from "@/screens/workspace/workspace-tab-menu-pages";
 import type { Theme } from "@/styles/theme";
 
 const ThemedEllipsis = withUnistyles(Ellipsis);
@@ -27,6 +30,7 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedArrowLeftToLine = withUnistyles(ArrowLeftToLine);
 const ThemedArrowRightToLine = withUnistyles(ArrowRightToLine);
+const ThemedArrowLeftRight = withUnistyles(ArrowLeftRight);
 const ThemedCopyX = withUnistyles(CopyX);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedX = withUnistyles(X);
@@ -55,6 +59,8 @@ function MobileTabDropdownMenuItem({
         return <ThemedArrowLeftToLine size={16} uniProps={mutedColorMapping} />;
       case "arrow-right-to-line":
         return <ThemedArrowRightToLine size={16} uniProps={mutedColorMapping} />;
+      case "arrow-left-right":
+        return <ThemedArrowLeftRight size={16} uniProps={mutedColorMapping} />;
       case "copy-x":
         return <ThemedCopyX size={16} uniProps={mutedColorMapping} />;
       case "pencil":
@@ -84,6 +90,35 @@ function MobileTabDropdownMenuItem({
   );
 }
 
+function MobileTabDropdownSubmenuTrigger({
+  entry,
+}: {
+  entry: Extract<WorkspaceTabMenuEntry, { kind: "submenu" }>;
+}) {
+  const leading = useMemo(
+    () =>
+      entry.icon === "arrow-left-right" ? (
+        <ThemedArrowLeftRight size={16} uniProps={mutedColorMapping} />
+      ) : undefined,
+    [entry.icon],
+  );
+  return (
+    <DropdownMenuSubTrigger id={entry.page.id} testID={entry.testID} leading={leading}>
+      {entry.label}
+    </DropdownMenuSubTrigger>
+  );
+}
+
+function renderMobileTabMenuEntry(entry: WorkspaceTabMenuEntry) {
+  if (entry.kind === "separator") {
+    return <DropdownMenuSeparator key={entry.key} />;
+  }
+  if (entry.kind === "submenu") {
+    return <MobileTabDropdownSubmenuTrigger key={entry.key} entry={entry} />;
+  }
+  return <MobileTabDropdownMenuItem key={entry.key} entry={entry} />;
+}
+
 export function MobileTabTrailingAccessory({
   menuTestIDBase,
   presentationLabel,
@@ -94,6 +129,7 @@ export function MobileTabTrailingAccessory({
   menuEntries: WorkspaceTabMenuEntry[];
 }): ReactElement {
   const { t } = useTranslation();
+  const menuPages = useWorkspaceTabMenuPages(menuEntries);
   return (
     <DropdownMenu compactMode="sheet">
       <DropdownMenuTrigger
@@ -111,14 +147,9 @@ export function MobileTabTrailingAccessory({
         width={220}
         sheetTitle={presentationLabel}
         testID={menuTestIDBase}
+        pages={menuPages}
       >
-        {menuEntries.map((entry) =>
-          entry.kind === "separator" ? (
-            <DropdownMenuSeparator key={entry.key} />
-          ) : (
-            <MobileTabDropdownMenuItem key={entry.key} entry={entry} />
-          ),
-        )}
+        {menuEntries.map(renderMobileTabMenuEntry)}
       </DropdownMenuContent>
     </DropdownMenu>
   );

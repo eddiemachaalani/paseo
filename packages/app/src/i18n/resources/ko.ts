@@ -588,6 +588,9 @@ export const ko: TranslationResources = {
         reloadAgent: "에이전트 다시 로드",
         reloadAgentTooltip:
           "스킬, MCP 또는 로그인 상태를 업데이트하려면 에이전트를 다시 로드하세요.",
+        switchProvider: "프로바이더 전환",
+        switchProviderTooltip:
+          "같은 에이전트를 실행하는 다른 프로바이더(예: 다른 계정)에서 이 에이전트를 계속 진행합니다.",
         close: "닫기",
         renameTerminal: "터미널 이름 변경",
         renameAgent: "에이전트 이름 변경",
@@ -629,6 +632,9 @@ export const ko: TranslationResources = {
         reloadingAgent: "에이전트 다시 로드 중...",
         reloadedAgent: "에이전트를 다시 로드했습니다",
         failedToReloadAgent: "에이전트를 다시 로드하지 못했습니다",
+        switchingProvider: "{{label}}(으)로 전환하는 중...",
+        switchedProvider: "{{label}}(으)로 전환했습니다",
+        failedToSwitchProvider: "프로바이더 전환에 실패했습니다",
         failedToCloseAgent: "에이전트를 닫지 못했습니다",
       },
       confirmations: {

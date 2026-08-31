@@ -5597,3 +5597,81 @@ describe("agent config setters", () => {
     });
   });
 });
+
+describe("agent.provider.switch.request", () => {
+  test("moves a loaded agent to the requested provider and answers with the correlated response", async () => {
+    const messages: SessionOutboundMessage[] = [];
+    const agent = { id: "agent-1", provider: "claude-work", lifecycle: "idle" };
+    const switchAgentProvider = vi
+      .fn()
+      .mockResolvedValue({ ...agent, provider: "claude-personal" });
+    const session = createSessionForTest({
+      messages,
+      agentManager: {
+        getAgent: vi.fn(() => agent),
+        hasInFlightRun: vi.fn(() => false),
+        waitForAgentClose: vi.fn(async () => undefined),
+        switchAgentProvider,
+      },
+    });
+
+    await session.handleMessage({
+      type: "agent.provider.switch.request",
+      agentId: "agent-1",
+      provider: "claude-personal",
+      requestId: "switch-1",
+    });
+
+    expect(switchAgentProvider).toHaveBeenCalledWith("agent-1", "claude-personal");
+    expect(messages).toContainEqual({
+      type: "agent.provider.switch.response",
+      payload: { requestId: "switch-1", agentId: "agent-1", accepted: true, error: null },
+    });
+  });
+
+  test("answers a rejected switch with the daemon's reason and an error frame", async () => {
+    const messages: SessionOutboundMessage[] = [];
+    const agent = { id: "agent-1", provider: "claude-work", lifecycle: "idle" };
+    const session = createSessionForTest({
+      messages,
+      agentManager: {
+        getAgent: vi.fn(() => agent),
+        hasInFlightRun: vi.fn(() => false),
+        waitForAgentClose: vi.fn(async () => undefined),
+        switchAgentProvider: vi
+          .fn()
+          .mockRejectedValue(
+            new Error(
+              "Provider 'codex' runs 'codex', not 'claude'. An agent can only move between providers that share a runtime.",
+            ),
+          ),
+      },
+    });
+
+    await session.handleMessage({
+      type: "agent.provider.switch.request",
+      agentId: "agent-1",
+      provider: "codex",
+      requestId: "switch-2",
+    });
+
+    expect(messages).toContainEqual({
+      type: "agent.provider.switch.response",
+      payload: {
+        requestId: "switch-2",
+        agentId: "agent-1",
+        accepted: false,
+        error: expect.stringContaining("share a runtime"),
+      },
+    });
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: "activity_log",
+        payload: expect.objectContaining({
+          type: "error",
+          content: expect.stringContaining("Failed to switch agent provider"),
+        }),
+      }),
+    );
+  });
+});

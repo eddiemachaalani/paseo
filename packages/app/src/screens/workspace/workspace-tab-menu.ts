@@ -18,6 +18,8 @@ export interface WorkspaceTabMenuLabels {
   closeOthers: string;
   reloadAgent: string;
   reloadAgentTooltip: string;
+  switchProvider: string;
+  switchProviderTooltip: string;
   close: string;
 }
 
@@ -34,22 +36,35 @@ export const DEFAULT_WORKSPACE_TAB_MENU_LABELS: WorkspaceTabMenuLabels = {
   closeOthers: i18n.t("workspace.tabs.menu.closeOthers"),
   reloadAgent: i18n.t("workspace.tabs.menu.reloadAgent"),
   reloadAgentTooltip: i18n.t("workspace.tabs.menu.reloadAgentTooltip"),
+  switchProvider: i18n.t("workspace.tabs.menu.switchProvider"),
+  switchProviderTooltip: i18n.t("workspace.tabs.menu.switchProviderTooltip"),
   close: i18n.t("workspace.tabs.menu.close"),
 };
+
+export type WorkspaceTabMenuIcon =
+  | "copy"
+  | "rotate-cw"
+  | "arrow-left-to-line"
+  | "arrow-right-to-line"
+  | "arrow-left-right"
+  | "copy-x"
+  | "pencil"
+  | "x";
+
+export interface WorkspaceTabMenuOption {
+  key: string;
+  label: string;
+  description?: string;
+  testID: string;
+  onSelect: () => void;
+}
 
 export type WorkspaceTabMenuEntry =
   | {
       kind: "item";
       key: string;
       label: string;
-      icon?:
-        | "copy"
-        | "rotate-cw"
-        | "arrow-left-to-line"
-        | "arrow-right-to-line"
-        | "copy-x"
-        | "pencil"
-        | "x";
+      icon?: WorkspaceTabMenuIcon;
       hint?: string;
       tooltip?: string;
       disabled?: boolean;
@@ -58,9 +73,42 @@ export type WorkspaceTabMenuEntry =
       onSelect: () => void;
     }
   | {
+      /**
+       * A decision behind a submenu (docs/menus.md): the row names the choice,
+       * the page lists the options. Renderers turn `page` into a
+       * `MenuPageDefinition` and the row into a `MenuSubTrigger`.
+       */
+      kind: "submenu";
+      key: string;
+      label: string;
+      icon?: WorkspaceTabMenuIcon;
+      testID: string;
+      page: {
+        id: string;
+        title: string;
+        options: WorkspaceTabMenuOption[];
+      };
+    }
+  | {
       kind: "separator";
       key: string;
     };
+
+export interface WorkspaceTabAgentProviderSwitchTarget {
+  provider: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * Moving an agent to another provider entry that runs the same agent, such as
+ * a second account configured as a profile. Absent when the host cannot do it;
+ * an agent with no targets gets no menu row.
+ */
+export interface WorkspaceTabAgentProviderSwitch {
+  resolveTargets: (agentId: string) => readonly WorkspaceTabAgentProviderSwitchTarget[];
+  onSwitch: (agentId: string, provider: string) => Promise<void> | void;
+}
 
 interface BuildWorkspaceTabMenuEntriesInput {
   surface: WorkspaceTabMenuSurface;
@@ -73,6 +121,7 @@ interface BuildWorkspaceTabMenuEntriesInput {
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCloseTabsBefore: (tabId: string) => Promise<void> | void;
@@ -90,6 +139,7 @@ interface BuildWorkspaceDesktopTabActionsInput {
   onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
+  agentProviderSwitch?: WorkspaceTabAgentProviderSwitch;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCloseTabsToLeft: (tabId: string) => Promise<void> | void;
@@ -177,6 +227,7 @@ export function buildWorkspaceTabMenuEntries(
     onCopyTerminalId,
     onCopyFilePath,
     onReloadAgent,
+    agentProviderSwitch,
     onRenameTab,
     onCloseTab,
     onCloseTabsBefore,
@@ -306,6 +357,30 @@ export function buildWorkspaceTabMenuEntries(
         void onReloadAgent(agentId);
       },
     });
+    const providerSwitch = agentProviderSwitch;
+    const switchTargets = providerSwitch?.resolveTargets(agentId) ?? [];
+    if (providerSwitch && switchTargets.length > 0) {
+      entries.push({
+        kind: "submenu",
+        key: "switch-provider",
+        label: labels.switchProvider,
+        icon: "arrow-left-right",
+        testID: `${menuTestIDBase}-switch-provider`,
+        page: {
+          id: `${menuTestIDBase}-switch-provider`,
+          title: labels.switchProvider,
+          options: switchTargets.map((target) => ({
+            key: target.provider,
+            label: target.label,
+            description: target.description,
+            testID: `${menuTestIDBase}-switch-provider-${target.provider}`,
+            onSelect: () => {
+              void providerSwitch.onSwitch(agentId, target.provider);
+            },
+          })),
+        },
+      });
+    }
   }
   entries.push({
     kind: "item",
@@ -338,6 +413,7 @@ export function buildWorkspaceDesktopTabActions(
       onCopyTerminalId: input.onCopyTerminalId,
       onCopyFilePath: input.onCopyFilePath,
       onReloadAgent: input.onReloadAgent,
+      agentProviderSwitch: input.agentProviderSwitch,
       onRenameTab: input.onRenameTab,
       onCloseTab: input.onCloseTab,
       onCloseTabsBefore: input.onCloseTabsToLeft,

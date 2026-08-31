@@ -10102,3 +10102,223 @@ test("onWorkspaceStateMayHaveChanged is not called for running shell tool calls"
 
   expect(onWorkspaceStateMayHaveChanged).not.toHaveBeenCalled();
 });
+
+class ProviderSwitchTestSession extends TestAgentSession {
+  closed = false;
+
+  constructor(
+    private readonly switchConfig: AgentSessionConfig,
+    private readonly resumedFrom?: AgentPersistenceHandle,
+  ) {
+    super(switchConfig);
+  }
+
+  // Mirrors a real provider: a resumed session keeps the native session id it
+  // was handed, and reports the provider it was launched under.
+  override describePersistence() {
+    return {
+      provider: this.switchConfig.provider,
+      sessionId: this.resumedFrom?.sessionId ?? this.id,
+    };
+  }
+
+  override async close(): Promise<void> {
+    this.closed = true;
+  }
+}
+
+class ProviderSwitchTestClient extends TestAgentClient {
+  readonly sessions: ProviderSwitchTestSession[] = [];
+  readonly resumedHandles: AgentPersistenceHandle[] = [];
+
+  override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+    const session = new ProviderSwitchTestSession(config);
+    this.sessions.push(session);
+    return session;
+  }
+
+  override async resumeSession(
+    handle: AgentPersistenceHandle,
+    config?: Partial<AgentSessionConfig>,
+  ): Promise<AgentSession> {
+    this.resumedHandles.push(handle);
+    const session = new ProviderSwitchTestSession(
+      { ...config, provider: this.provider, cwd: config?.cwd ?? process.cwd() },
+      handle,
+    );
+    this.sessions.push(session);
+    return session;
+  }
+}
+
+function createProviderSwitchManager(workdir: string) {
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const work = new ProviderSwitchTestClient("claude-work");
+  const personal = new ProviderSwitchTestClient("claude-personal");
+  const codex = new ProviderSwitchTestClient("codex");
+  const manager = new AgentManager({
+    clients: { "claude-work": work, "claude-personal": personal, codex },
+    providerDefinitions: {
+      "claude-work": { enabled: true, derivedFromProviderId: "claude" },
+      "claude-personal": { enabled: true, derivedFromProviderId: "claude" },
+      "claude-off": { enabled: false, derivedFromProviderId: "claude" },
+      codex: { enabled: true },
+    },
+    registry: storage,
+    logger,
+  });
+  return { storage, work, personal, codex, manager };
+}
+
+test("switchAgentProvider resumes the session under a sibling provider and persists the move", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-switch-provider-"));
+  const { storage, work, personal, manager } = createProviderSwitchManager(workdir);
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "claude-work", cwd: workdir, model: "gpt-5.4" },
+      undefined,
+      { workspaceId: undefined, labels: { topic: "billing" } },
+    );
+    const sessionId = created.persistence?.sessionId;
+    expect(sessionId).toBeTruthy();
+    const originalSession = work.sessions[0];
+    expect(manager.getAgent(created.id)?.session).toBe(originalSession);
+
+    const switched = await manager.switchAgentProvider(created.id, "claude-personal");
+
+    expect(switched.provider).toBe("claude-personal");
+    expect(switched.config.provider).toBe("claude-personal");
+    expect(switched.config.model).toBe("gpt-5.4");
+    expect(switched.lifecycle).toBe("idle");
+    expect(switched.labels).toEqual({ topic: "billing" });
+    expect(switched.persistence).toMatchObject({ provider: "claude-personal", sessionId });
+    expect(personal.resumedHandles).toEqual([
+      expect.objectContaining({ provider: "claude-personal", sessionId }),
+    ]);
+    expect(work.resumedHandles).toEqual([]);
+    expect(originalSession?.closed).toBe(true);
+    expect(manager.getAgent(created.id)?.session).toBe(personal.sessions[0]);
+
+    const record = await storage.get(created.id);
+    expect(record?.provider).toBe("claude-personal");
+    expect(record?.persistence).toMatchObject({ provider: "claude-personal", sessionId });
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("switchAgentProvider rejects a provider that runs a different agent and keeps the session", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-switch-provider-"));
+  const { work, codex, manager } = createProviderSwitchManager(workdir);
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "claude-work", cwd: workdir },
+      undefined,
+      {
+        workspaceId: undefined,
+      },
+    );
+    const originalSession = work.sessions[0];
+
+    await expect(manager.switchAgentProvider(created.id, "codex")).rejects.toThrow(
+      "Provider 'codex' runs 'codex', not 'claude'",
+    );
+
+    expect(codex.resumedHandles).toEqual([]);
+    expect(manager.getAgent(created.id)?.session).toBe(originalSession);
+    expect(manager.getAgent(created.id)?.provider).toBe("claude-work");
+    expect(originalSession?.closed).toBe(false);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("switchAgentProvider rejects unknown and disabled providers", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-switch-provider-"));
+  const { work, manager } = createProviderSwitchManager(workdir);
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "claude-work", cwd: workdir },
+      undefined,
+      {
+        workspaceId: undefined,
+      },
+    );
+
+    await expect(manager.switchAgentProvider(created.id, "claude-missing")).rejects.toThrow(
+      "Unknown provider 'claude-missing'",
+    );
+    await expect(manager.switchAgentProvider(created.id, "claude-off")).rejects.toThrow(
+      "Provider 'claude-off' is disabled",
+    );
+
+    expect(manager.getAgent(created.id)?.session).toBe(work.sessions[0]);
+    expect(manager.getAgent(created.id)?.provider).toBe("claude-work");
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("switchAgentProvider to the agent's current provider is a no-op", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-switch-provider-"));
+  const { work, manager } = createProviderSwitchManager(workdir);
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "claude-work", cwd: workdir },
+      undefined,
+      {
+        workspaceId: undefined,
+      },
+    );
+
+    const result = await manager.switchAgentProvider(created.id, "claude-work");
+
+    expect(result.provider).toBe("claude-work");
+    expect(work.resumedHandles).toEqual([]);
+    expect(work.sessions).toHaveLength(1);
+    expect(manager.getAgent(created.id)?.session).toBe(work.sessions[0]);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("switchAgentProvider drops plan windows observed on the previous provider but keeps context usage", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-switch-provider-"));
+  const { work, manager } = createProviderSwitchManager(workdir);
+
+  try {
+    const created = await manager.createAgent(
+      { provider: "claude-work", cwd: workdir },
+      undefined,
+      {
+        workspaceId: undefined,
+      },
+    );
+    work.sessions[0]?.pushEvent({
+      type: "usage_updated",
+      provider: "claude-work",
+      usage: {
+        contextWindowUsedTokens: 1200,
+        contextWindowMaxTokens: 200000,
+        planWindows: [{ id: "five_hour", label: "Session", usedPct: 40 }],
+        planWindowsObservedAt: "2026-09-01T00:00:00.000Z",
+      },
+    });
+    await vi.waitFor(() => {
+      expect(manager.getAgent(created.id)?.lastUsage?.planWindows).toHaveLength(1);
+    });
+
+    const switched = await manager.switchAgentProvider(created.id, "claude-personal");
+
+    expect(switched.lastUsage).toEqual({
+      contextWindowUsedTokens: 1200,
+      contextWindowMaxTokens: 200000,
+    });
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});

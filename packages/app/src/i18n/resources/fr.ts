@@ -591,6 +591,9 @@ export const fr: TranslationResources = {
         reloadAgent: "Agent de rechargement",
         reloadAgentTooltip:
           "Rechargez l'agent pour mettre à jour les compétences, les MCP ou le statut de connexion.",
+        switchProvider: "Changer de fournisseur",
+        switchProviderTooltip:
+          "Poursuivre cet agent sur une autre entrée de fournisseur exécutant le même agent, par exemple un autre compte.",
         close: "Fermer",
         renameTerminal: "Renommer le terminal",
         renameAgent: "Renommer l'agent",
@@ -632,6 +635,9 @@ export const fr: TranslationResources = {
         reloadingAgent: "Agent de rechargement...",
         reloadedAgent: "Agent rechargé",
         failedToReloadAgent: "Échec du rechargement de l'agent",
+        switchingProvider: "Passage à {{label}}...",
+        switchedProvider: "Passé à {{label}}",
+        failedToSwitchProvider: "Échec du changement de fournisseur",
         failedToCloseAgent: "Échec de la fermeture de l'agent",
       },
       confirmations: {

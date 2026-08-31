@@ -42,7 +42,8 @@ export { MenuItem as ContextMenuItem };
 export { MenuLabel as ContextMenuLabel };
 export { MenuSeparator as ContextMenuSeparator };
 export { MenuHint as ContextMenuHint };
-export type { ActionStatus } from "@/components/ui/menu";
+export { MenuSubTrigger as ContextMenuSubTrigger } from "@/components/ui/menu";
+export type { ActionStatus, MenuPageDefinition } from "@/components/ui/menu";
 
 /**
  * Context menus use the mobile menu convention by default: long press opens a bottom sheet on a
